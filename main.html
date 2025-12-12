@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="da">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>12 Refleksionskort</title>
+
+  <style>
+    :root{
+      --bg:#0b1220;
+      --card:rgba(255,255,255,.06);
+      --card2:rgba(255,255,255,.09);
+      --text:#eaf0ff;
+      --muted:rgba(234,240,255,.75);
+      --stroke:rgba(255,255,255,.12);
+      --shadow:0 10px 30px rgba(0,0,0,.35);
+      --radius:18px;
+    }
+
+    *{ box-sizing:border-box; }
+
+    body{
+      margin:0;
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+      background:
+        radial-gradient(1200px 900px at 20% 0%, rgba(110,168,255,.25), transparent 60%),
+        radial-gradient(1200px 900px at 90% 20%, rgba(120,255,214,.14), transparent 55%),
+        var(--bg);
+      color:var(--text);
+      min-height:100vh;
+      padding:28px;
+    }
+
+    header{
+      max-width:1100px;
+      margin:0 auto 18px;
+      display:flex;
+      justify-content:space-between;
+      gap:12px;
+      flex-wrap:wrap;
+    }
+
+    h1{ margin:0; font-size:20px; }
+
+    .hint{
+      margin:0;
+      font-size:13px;
+      color:var(--muted);
+    }
+
+    .grid{
+      max-width:1100px;
+      margin:0 auto;
+      display:grid;
+      grid-template-columns:repeat(4,1fr);
+      gap:14px;
+    }
+
+    @media(max-width:900px){
+      .grid{ grid-template-columns:repeat(2,1fr); }
+    }
+    @media(max-width:520px){
+      .grid{ grid-template-columns:1fr; }
+    }
+
+    .card{
+      position:relative;
+      min-height:120px;
+      padding:14px;
+      border-radius:var(--radius);
+      border:1px solid var(--stroke);
+      background:linear-gradient(180deg,var(--card),rgba(255,255,255,.04));
+      box-shadow:var(--shadow);
+      cursor:pointer;
+      transition:.15s ease;
+    }
+
+    .card:hover{
+      transform:translateY(-1px);
+      background:linear-gradient(180deg,var(--card2),rgba(255,255,255,.05));
+    }
+
+    .title{
+      font-weight:650;
+      font-size:14px;
+      padding-right:26px;
+    }
+
+    .meta{
+      position:absolute;
+      top:12px;
+      right:12px;
+      font-size:12px;
+      opacity:.6;
+    }
+
+    .editorWrap{
+      margin-top:10px;
+      max-height:0;
+      opacity:0;
+      transform:scaleY(.95);
+      transform-origin:top;
+      transition:.25s ease;
+      pointer-events:none;
+    }
+
+    .card.open .editorWrap{
+      max-height:260px;
+      opacity:1;
+      transform:scaleY(1);
+      pointer-events:auto;
+    }
+
+    textarea{
+      width:100%;
+      min-height:90px;
+      resize:vertical;
+      padding:12px;
+      border-radius:14px;
+      border:1px solid rgba(255,255,255,.15);
+      background:rgba(5,10,20,.45);
+      color:var(--text);
+      font-size:13px;
+    }
+
+    textarea:focus{
+      outline:none;
+      border-color:rgba(110,168,255,.6);
+      box-shadow:0 0 0 3px rgba(110,168,255,.2);
+    }
+
+    .closeHint{
+      margin-top:8px;
+      font-size:12px;
+      opacity:.6;
+    }
+  </style>
+</head>
+
+<body>
+
+<header>
+  <h1>Nøglebegreber</h1>
+  <p class="hint">Klik på et kort for at skrive – teksten gemmes automatisk</p>
+</header>
+
+<main class="grid" id="grid"></main>
+
+<script>
+  const STORAGE_KEY = "refleksionskort_data_v1";
+
+  const titles = [
+    "Værdsættende 1",
+    "Værdsættende 2",
+    "Mentalisering",
+    "Nysgerrighed 1",
+    "Nysgerrighed 2",
+    "Hypotese (hjælp)",
+    "Neutralitet (kort)",
+    "Evaluering 1 (tid)",
+    "Evaluering 2 (kort)",
+    "Åben / lukket vejledning",
+    "Erkendelse 1 (familie dynamik)",
+    "Erkendelse 2 (egne motivation)"
+  ];
+
+  const grid = document.getElementById("grid");
+  let openCard = null;
+
+  // hent gemte data
+  const savedData = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+
+  function save(index, value){
+    savedData[index] = value;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(savedData));
+  }
+
+  function makeCard(title, index){
+    const card = document.createElement("div");
+    card.className = "card";
+
+    const titleEl = document.createElement("div");
+    titleEl.className = "title";
+    titleEl.textContent = title;
+
+    const meta = document.createElement("div");
+    meta.className = "meta";
+    meta.textContent = "✎";
+
+    const wrap = document.createElement("div");
+    wrap.className = "editorWrap";
+
+    const textarea = document.createElement("textarea");
+    textarea.placeholder = "Skriv dine noter her…";
+    textarea.value = savedData[index] || "";
+
+    textarea.addEventListener("input", () => {
+      save(index, textarea.value);
+    });
+
+    textarea.addEventListener("click", e => e.stopPropagation());
+
+    const hint = document.createElement("div");
+    hint.className = "closeHint";
+    hint.textContent = "Klik udenfor for at lukke";
+
+    wrap.append(textarea, hint);
+    card.append(titleEl, meta, wrap);
+
+    card.addEventListener("click", () => {
+      if (openCard && openCard !== card) {
+        openCard.classList.remove("open");
+      }
+      card.classList.add("open");
+      openCard = card;
+      setTimeout(() => textarea.focus(), 40);
+    });
+
+    return card;
+  }
+
+  titles.forEach((t, i) => grid.appendChild(makeCard(t, i)));
+
+  document.addEventListener("click", e => {
+    if (openCard && !openCard.contains(e.target)) {
+      openCard.classList.remove("open");
+      openCard = null;
+    }
+  });
+
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && openCard) {
+      openCard.classList.remove("open");
+      openCard = null;
+    }
+  });
+</script>
+
+</body>
+</html>
