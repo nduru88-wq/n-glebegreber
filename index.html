@@ -15,6 +15,7 @@
       --stroke:rgba(255,255,255,.12);
       --shadow:0 10px 30px rgba(0,0,0,.35);
       --radius:18px;
+      --danger:#ff3b3b;
     }
 
     *{ box-sizing:border-box; }
@@ -29,6 +30,7 @@
       color:var(--text);
       min-height:100vh;
       padding:28px;
+      padding-bottom:88px; /* plads til stop-knap bar */
     }
 
     header{
@@ -65,7 +67,7 @@
 
     .card{
       position:relative;
-      min-height:120px;
+      min-height:140px; /* lidt højere pga. knapper */
       padding:14px;
       border-radius:var(--radius);
       border:1px solid var(--stroke);
@@ -80,10 +82,18 @@
       background:linear-gradient(180deg,var(--card2),rgba(255,255,255,.05));
     }
 
+    .titleRow{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:10px;
+      padding-right:26px; /* plads til blyant */
+    }
+
     .title{
       font-weight:650;
       font-size:14px;
-      padding-right:26px;
+      line-height:1.2;
     }
 
     .meta{
@@ -92,6 +102,45 @@
       right:12px;
       font-size:12px;
       opacity:.6;
+      pointer-events:none;
+    }
+
+    /* Lydknapper */
+    .audioBtns{
+      display:flex;
+      gap:8px;
+      flex-shrink:0;
+    }
+
+    .audioBtn{
+      border:1px solid rgba(255,255,255,.18);
+      background:rgba(5,10,20,.45);
+      color:var(--text);
+      border-radius:10px;
+      font-size:12px;
+      line-height:1;
+      padding:7px 9px;
+      cursor:pointer;
+      transition:.15s ease;
+      user-select:none;
+    }
+
+    .audioBtn:hover{
+      border-color:rgba(110,168,255,.6);
+      box-shadow:0 0 0 3px rgba(110,168,255,.18);
+      transform:translateY(-1px);
+    }
+
+    .audioBtn:active{
+      transform:translateY(0px);
+    }
+
+    .audioStatus{
+      margin-top:10px;
+      font-size:12px;
+      color:var(--muted);
+      min-height:16px;
+      word-break:break-word;
     }
 
     .editorWrap{
@@ -134,6 +183,46 @@
       font-size:12px;
       opacity:.6;
     }
+
+    /* Bundbar med STOP */
+    .bottomBar{
+      position:fixed;
+      left:0;
+      right:0;
+      bottom:0;
+      z-index:999;
+      padding:12px 16px;
+      border-top:1px solid rgba(255,255,255,.12);
+      background:rgba(11,18,32,.75);
+      backdrop-filter: blur(10px);
+    }
+
+    .bottomInner{
+      max-width:1100px;
+      margin:0 auto;
+      display:flex;
+      justify-content:flex-end;
+    }
+
+    .stopBtn{
+      border:1px solid rgba(255,255,255,.15);
+      background:rgba(255,59,59,.92);
+      color:white;
+      font-weight:700;
+      border-radius:14px;
+      padding:10px 14px;
+      cursor:pointer;
+      transition:.15s ease;
+      letter-spacing:.2px;
+      user-select:none;
+    }
+
+    .stopBtn:hover{
+      transform:translateY(-1px);
+      box-shadow:0 10px 22px rgba(255,59,59,.15);
+    }
+
+    .stopBtn:active{ transform:translateY(0px); }
   </style>
 </head>
 
@@ -141,31 +230,44 @@
 
 <header>
   <h1>Nøglebegreber</h1>
-  <p class="hint">Klik på et kort for at skrive – teksten gemmes automatisk</p>
+  <p class="hint">Klik på et kort for at skrive – teksten gemmes automatisk. Tryk på 1/2 for at afspille mp3.</p>
 </header>
 
 <main class="grid" id="grid"></main>
 
+<!-- Rød stop-knap i bunden -->
+<div class="bottomBar" role="region" aria-label="Lydkontrol">
+  <div class="bottomInner">
+    <button class="stopBtn" id="stopAll" type="button">STOP LYD</button>
+  </div>
+</div>
+
 <script>
   const STORAGE_KEY = "refleksionskort_data_v1";
 
+  // 12 titler i alfabetisk orden (venstre→højre pr. række)
   const titles = [
-    "Værdsættende 1",
-    "Værdsættende 2",
-    "Mentalisering",
-    "Nysgerrighed 1",
-    "Nysgerrighed 2",
-    "Hypotese (hjælp)",
-    "Neutralitet (kort)",
-    "Evaluering 1 (tid)",
-    "Evaluering 2 (kort)",
-    "Åben / lukket vejledning",
-    "Erkendelse 1 (familie dynamik)",
-    "Erkendelse 2 (egne motivation)"
+    "Antropologen",
+    "Coachens input",
+    "Erkendelse",
+    "Evaluering",
+    "Fremtidsforskeren",
+    "Kaptajnen",
+    "Mentalisering",  // <-- fjernet ?
+    "Neutralitet",
+    "Nøgleord",
+    "Spejling",
+    "Uærbødighed",
+    "Værdsættende"
   ];
 
   const grid = document.getElementById("grid");
   let openCard = null;
+
+  // Én global audio-player
+  const player = new Audio();
+  player.preload = "none";
+  let currentStatusEl = null;
 
   // hent gemte data
   const savedData = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
@@ -175,13 +277,96 @@
     localStorage.setItem(STORAGE_KEY, JSON.stringify(savedData));
   }
 
+  // Gør titel til et filnavn: fjern ? og trim.
+  function titleToFileBase(title){
+    return title.replaceAll("?", "").trim();
+  }
+
+  function setStatus(el, text){
+    el.textContent = text || "";
+  }
+
+  function stopAllAudio(){
+    player.pause();
+    player.currentTime = 0;
+    if (currentStatusEl) setStatus(currentStatusEl, "");
+    currentStatusEl = null;
+  }
+
+  function playFile(file, statusEl){
+    const sameFile =
+      (player.src && player.src.endsWith("/" + file)) ||
+      (player.src && player.src.endsWith(file));
+
+    if (currentStatusEl && currentStatusEl !== statusEl){
+      setStatus(currentStatusEl, "");
+    }
+    currentStatusEl = statusEl;
+
+    if (sameFile && !player.paused){
+      player.pause();
+      setStatus(statusEl, "Pause: " + file);
+      return;
+    }
+
+    player.pause();
+    player.currentTime = 0;
+    player.src = file;
+
+    setStatus(statusEl, "Afspiller: " + file);
+
+    player.play().catch(() => {
+      setStatus(statusEl, "Fejl: Kan ikke afspille / fil ikke fundet: " + file);
+    });
+  }
+
+  player.addEventListener("ended", () => {
+    if (currentStatusEl) setStatus(currentStatusEl, "");
+  });
+
+  player.addEventListener("error", () => {
+    if (currentStatusEl) setStatus(currentStatusEl, "Fejl: Kan ikke afspille filen");
+  });
+
   function makeCard(title, index){
     const card = document.createElement("div");
     card.className = "card";
 
+    const titleRow = document.createElement("div");
+    titleRow.className = "titleRow";
+
     const titleEl = document.createElement("div");
     titleEl.className = "title";
     titleEl.textContent = title;
+
+    const btnWrap = document.createElement("div");
+    btnWrap.className = "audioBtns";
+
+    const status = document.createElement("div");
+    status.className = "audioStatus";
+
+    const base = titleToFileBase(title);
+
+    const btn1 = document.createElement("button");
+    btn1.type = "button";
+    btn1.className = "audioBtn";
+    btn1.textContent = "1";
+    btn1.addEventListener("click", (e) => {
+      e.stopPropagation();
+      playFile(`${base}-1.mp3`, status);
+    });
+
+    const btn2 = document.createElement("button");
+    btn2.type = "button";
+    btn2.className = "audioBtn";
+    btn2.textContent = "2";
+    btn2.addEventListener("click", (e) => {
+      e.stopPropagation();
+      playFile(`${base}-2.mp3`, status);
+    });
+
+    btnWrap.append(btn1, btn2);
+    titleRow.append(titleEl, btnWrap);
 
     const meta = document.createElement("div");
     meta.className = "meta";
@@ -194,10 +379,7 @@
     textarea.placeholder = "Skriv dine noter her…";
     textarea.value = savedData[index] || "";
 
-    textarea.addEventListener("input", () => {
-      save(index, textarea.value);
-    });
-
+    textarea.addEventListener("input", () => save(index, textarea.value));
     textarea.addEventListener("click", e => e.stopPropagation());
 
     const hint = document.createElement("div");
@@ -205,7 +387,8 @@
     hint.textContent = "Klik udenfor for at lukke";
 
     wrap.append(textarea, hint);
-    card.append(titleEl, meta, wrap);
+
+    card.append(titleRow, meta, status, wrap);
 
     card.addEventListener("click", () => {
       if (openCard && openCard !== card) {
@@ -221,6 +404,12 @@
 
   titles.forEach((t, i) => grid.appendChild(makeCard(t, i)));
 
+  // Stop-knap
+  document.getElementById("stopAll").addEventListener("click", (e) => {
+    e.stopPropagation();
+    stopAllAudio();
+  });
+
   document.addEventListener("click", e => {
     if (openCard && !openCard.contains(e.target)) {
       openCard.classList.remove("open");
@@ -232,6 +421,10 @@
     if (e.key === "Escape" && openCard) {
       openCard.classList.remove("open");
       openCard = null;
+    }
+    if (e.key === "Escape") {
+      // bonus: ESC stopper også lyd
+      stopAllAudio();
     }
   });
 </script>
